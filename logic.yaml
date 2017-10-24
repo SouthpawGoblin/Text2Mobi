@@ -1,0 +1,9 @@
+INPUT_TXT
+INPUT_PDF
+  extractString
+  INPUT_STRING
+    stringPreProcess
+      injectIntoHtmlTemplate
+      INPUT_HTML
+        kindlegen
+          outputPostProcess
