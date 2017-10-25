@@ -1,7 +1,6 @@
 import os
 import hashlib
 import time
-import logging
 from pyquery import PyQuery as pq
 
 
@@ -14,14 +13,12 @@ class Text2Mobi:
     SUPPORTED_FILE_EXTS = [".txt", ".html"]
     SUPPORTED_INPUT_TYPES = ["file", "string"]
 
-    def __init__(self, kindlegen_path, temp_folder_path=None):
+    def __init__(self, kindlegen_path="./kindlegen/win32/kindlegen.exe", temp_folder_path="./temp"):
         assert os.path.exists(kindlegen_path), "Kindlegen file not found"
         self.kindlegen_path = kindlegen_path
-        if temp_folder_path and os.path.isdir(temp_folder_path):
-            self.temp_folder_path = temp_folder_path
-        else:
-            logging.warning("No valid 'temp_folder_path' is given, using default './temp'")
-            self.temp_folder_path = "./temp"
+        if not os.path.exists(temp_folder_path):
+            os.mkdir(temp_folder_path)
+        self.temp_folder_path = temp_folder_path
 
     def convert(self, book_title, input_file="", input_text="", output_path=""):
         """
@@ -32,7 +29,7 @@ class Text2Mobi:
         input_type = None
         if len(input_file):
             input_file = os.path.normpath(input_file)
-            input_file_ext = os.path.splitext(input_file)[1]
+            input_file_ext = os.path.splitext(input_file)[1].lower()
             assert input_file_ext in Text2Mobi.SUPPORTED_FILE_EXTS, "Input File type not supported"
             input_type = "file"
         elif len(input_text):
@@ -40,43 +37,59 @@ class Text2Mobi:
 
         # current directory is the default output path
         output_path = output_path if len(output_path) else os.getcwd()
-        os.mkdir(self.temp_folder_path) if not os.path.exists(self.temp_folder_path) else None
 
+        # 1. extract content string
+        content_string = ""
         if input_type is None:
-            logging.error("No valid content uploaded")
-            return
-        elif input_type == "file":
-            if input_file_ext == ".txt":
-                with open(input_file, "r+") as f:
-                    input_text = f.read()
+            raise Exception("No valid content uploaded")
         elif input_type == "string":
+            content_string = input_text
+        elif input_type == "file" and input_file_ext != ".html":
+            content_string = self._extract_string(input_file)
+
+        # 2. pre-process content string
+        processed_string = ""
+        if len(content_string):
+            processed_string = self._pre_process_string(content_string)
+
+        # 3. inject content into template
+        injected_html_path = ""
+        if len(processed_string):
             dir_name = self._md5(str(time.time()) + book_title)[:8]
-            temp_dir = "./temp/" + dir_name
+            temp_dir = self.temp_folder_path + "/" + dir_name
             temp_file = temp_dir + "/book.html"
             os.mkdir(temp_dir)
-            with open("./templates/book.html", "r") as tpl:
-                c = tpl.read()
-                print(c)
-                d = pq(c)
-            d('article').append(input_text)
-            d('title').empty().append(book_title)
-            print(d)
-            with open(temp_file, "w+") as f:
-                f.write(str(d))
-            self._kindlegen('./kindlegen/win32/kindlegen.exe', temp_file)
+            self._inject_into_template(book_title, processed_string, "./templates/book.html", temp_file)
+            injected_html_path = temp_file
+        elif input_type == "file" and input_file_ext == ".html":
+            injected_html_path = input_file
+
+        # 4. kindlegen
+        if len(injected_html_path):
+            self._kindlegen(self.kindlegen_path, injected_html_path)
 
     @staticmethod
     def _extract_string(file_path):
-        with open(file_path, "r") as f:
-            return f.read()
+        ext = os.path.splitext(file_path)[1]
+        if ext == ".txt":
+            with open(file_path, "r+") as f:
+                return f.read()
+        elif ext == ".pdf":
+            # TODO
+            return ""
 
     @staticmethod
     def _pre_process_string(string):
-        pass
+        return string.replace("\n", "<br>")
 
     @staticmethod
-    def _inject_into_template(string, template_path):
-        pass
+    def _inject_into_template(title, content, template_path, output_path):
+        with open(template_path, "r") as tpl:
+            d = pq(tpl.read())
+        d('title').empty().append(title)
+        d('article').append(content)
+        with open(output_path, "w+", encoding="utf-8") as f:
+            f.write(str(d))
 
     @staticmethod
     def _kindlegen(kindlegen_path, target_path):
@@ -96,5 +109,5 @@ class Text2Mobi:
 
 
 if __name__ == "__main__":
-    t2m = Text2Mobi("./kindlegen/win32/kindlegen.exe")
-    t2m.convert("my first book", input_text="This is my first book!")
+    t2m = Text2Mobi()
+    t2m.convert("my first book", input_text="This is my first book!\nI like it!")
