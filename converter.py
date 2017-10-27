@@ -80,7 +80,7 @@ class Text2Mobi:
 
     @staticmethod
     def _pre_process_string(string):
-        return string.replace("\n", "<br>")
+        return string.replace("\n", "<br>").replace(" ", "&nbsp;").replace("\t", "&nbsp;" * 4)
 
     @staticmethod
     def _inject_into_template(title, content, template_path, output_path):
@@ -110,4 +110,5 @@ class Text2Mobi:
 
 if __name__ == "__main__":
     t2m = Text2Mobi()
-    t2m.convert("my first book", input_text="This is my first book!\nI like it!")
+    # t2m.convert("my first book", input_text="   This is my first book!\nI like it!")
+    t2m.convert("test file", input_file="C:/Users/Yinzhe Qi/Desktop/女大当家(书本网www.bookben.com).txt")
